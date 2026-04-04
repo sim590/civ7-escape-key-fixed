@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Mod id="escape-key-fixed" version="1" xmlns="ModInfo">
+	<Properties>
+		<Name>EscapeKeyFixed</Name>
+		<Description>Pressing Escape deselects the current unit or city before opening the pause menu, like in Civ 6.</Description>
+		<Authors>simon</Authors>
+		<AffectsSavedGames>0</AffectsSavedGames>
+	</Properties>
+	<Dependencies>
+	</Dependencies>
+	<ActionCriteria>
+		<Criteria id="always">
+			<AlwaysMet/>
+		</Criteria>
+	</ActionCriteria>
+	<ActionGroups>
+		<ActionGroup id="escape-ui" scope="game" criteria="always">
+			<Actions>
+				<UIScripts>
+					<Item>ui/escape-key-fixed.js</Item>
+				</UIScripts>
+			</Actions>
+		</ActionGroup>
+	</ActionGroups>
+</Mod>
