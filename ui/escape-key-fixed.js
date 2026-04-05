@@ -88,12 +88,32 @@ window.addEventListener("engine-input", (inputEvent) => {
     // interne — un panneau est probablement ouvert (ex. : attributs
     // de dirigeant). On ferme l'écran courant du ContextManager pour
     // empêcher root-game.js d'ouvrir le menu pause.
+    //
+    // Note : getCurrentTarget() retourne l'élément DOM (ComponentRoot),
+    // pas l'instance du composant (Component/Panel). Les méthodes comme
+    // askForClose() et close() sont sur l'objet .component.
+    //
+    // Ordre de priorité pour la fermeture :
+    //  1. askForClose() — utilisé par les écrans ouverts via le
+    //     PopupSequencer (ex. : screen-unlocks). Cette méthode passe
+    //     par PopupSequencer.closePopup() → DisplayQueueManager.close()
+    //     pour nettoyer la requête d'affichage. Sans ça, la requête
+    //     fantôme reste dans activeRequests et cause une réouverture
+    //     de l'écran quand DisplayQueueManager.resume() est appelé
+    //     (ex. : après la fermeture du menu pause).
+    //  2. close() — utilisé par les panneaux simples (ex. : attributs
+    //     de dirigeant) qui sont poussés directement via
+    //     ContextManager.push() sans passer par le PopupSequencer.
+    //  3. ContextManager.pop() — dernier recours.
     const currentScreen = ContextManager.getCurrentTarget();
     if (currentScreen) {
         inputEvent.stopImmediatePropagation();
         inputEvent.preventDefault();
-        if (typeof currentScreen.close === 'function') {
-            currentScreen.close();
+        const panel = currentScreen.component;
+        if (typeof panel?.askForClose === 'function') {
+            panel.askForClose();
+        } else if (typeof panel?.close === 'function') {
+            panel.close();
         } else {
             ContextManager.pop(currentScreen.tagName);
         }
