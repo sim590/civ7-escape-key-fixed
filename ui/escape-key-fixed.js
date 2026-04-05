@@ -9,9 +9,10 @@
  *
  * Corrige le comportement de la touche Échap pour qu'elle désélectionne
  * l'unité ou la ville en cours avant d'ouvrir le menu pause,
- * comme dans Civilization VI.
+ * comme dans Civilization VI. Ferme aussi les panneaux ouverts
+ * (ex. : attributs de dirigeant) avant d'ouvrir le menu pause.
  *
- * Problème : dans le jeu de base, deux chemins de code font défaut :
+ * Problème : dans le jeu de base, trois chemins de code font défaut :
  *
  * 1) WorldInput gère l'action "cancel" (manette) mais pas
  *    "keyboard-escape" (clavier). L'événement passe donc directement
@@ -24,28 +25,38 @@
  *    gestionnaires enregistrés (engineInputEventHandlers) ne soient
  *    atteints.
  *
+ * 3) Quand un panneau est ouvert en mode par défaut (ex. : attributs
+ *    de dirigeant), le panneau gère Échap via un écouteur sur window
+ *    en phase bubble, mais root-game.js a été enregistré AVANT et
+ *    utilise stopPropagation() au lieu de stopImmediatePropagation().
+ *    Le menu pause s'ouvre donc en même temps que le panneau ferme.
+ *    De plus, canOpenPauseMenu() ne vérifie pas si des écrans sont
+ *    sur la pile du ContextManager.
+ *
  * Solution double :
  *
  * A) Un écouteur en phase de capture sur window intercepte
  *    keyboard-escape quand il est distribué sur un élément DOM interne
- *    (event.target !== window). Cela bloque l'événement avant que
- *    root-game.js ne le voie pendant la remontée du FocusManager.
+ *    (event.target !== window). Quand une unité ou ville est
+ *    sélectionnée, il appelle InterfaceMode.switchToDefault(). Quand
+ *    un panneau est ouvert en mode par défaut, il ferme le panneau
+ *    via close() ou ContextManager.pop().
  *
  * B) Un gestionnaire enregistré dans le ContextManager attrape les cas
- *    où le FocusManager n'est pas actif (ex. : sélection d'unité).
+ *    où aucune distribution DOM interne n'a eu lieu (ex. : sélection
+ *    d'unité sans panneau focusé).
  */
 
 import { InterfaceMode } from '/core/ui/interface-modes/interface-modes.js';
 import ContextManager from '/core/ui/context-manager/context-manager.js';
 
 /**
- * Vérifie si l'événement keyboard-escape devrait désélectionner
- * au lieu d'ouvrir le menu pause.
+ * Vérifie si l'événement est un keyboard-escape terminé qui ne
+ * concerne pas le menu pause.
  */
-function shouldIntercept(inputEvent) {
+function isEscapeFinish(inputEvent) {
     if (inputEvent.detail.name !== "keyboard-escape") return false;
     if (inputEvent.detail.status !== InputActionStatuses.FINISH) return false;
-    if (InterfaceMode.isInDefaultMode()) return false;
     if (InterfaceMode.isInInterfaceMode("INTERFACEMODE_PAUSE_MENU")) return false;
     return true;
 }
@@ -58,16 +69,35 @@ function shouldIntercept(inputEvent) {
 // L'événement remonte normalement jusqu'à window où root-game.js
 // l'attraperait — on le bloque ici en phase de capture.
 //
-// On distingue les distributions internes (target !== window) de
-// la distribution finale par action-handler (target === window).
+// Deux cas :
+//  - Mode non par défaut (unité/ville) → désélectionner
+//  - Mode par défaut avec écran ouvert → fermer l'écran
 // ═══════════════════════════════════════════════════════════════════
 window.addEventListener("engine-input", (inputEvent) => {
     if (inputEvent.target === window) return;
-    if (!shouldIntercept(inputEvent)) return;
+    if (!isEscapeFinish(inputEvent)) return;
 
-    inputEvent.stopImmediatePropagation();
-    inputEvent.preventDefault();
-    InterfaceMode.switchToDefault();
+    if (!InterfaceMode.isInDefaultMode()) {
+        inputEvent.stopImmediatePropagation();
+        inputEvent.preventDefault();
+        InterfaceMode.switchToDefault();
+        return;
+    }
+
+    // Mode par défaut, mais l'événement est distribué sur un élément
+    // interne — un panneau est probablement ouvert (ex. : attributs
+    // de dirigeant). On ferme l'écran courant du ContextManager pour
+    // empêcher root-game.js d'ouvrir le menu pause.
+    const currentScreen = ContextManager.getCurrentTarget();
+    if (currentScreen) {
+        inputEvent.stopImmediatePropagation();
+        inputEvent.preventDefault();
+        if (typeof currentScreen.close === 'function') {
+            currentScreen.close();
+        } else {
+            ContextManager.pop(currentScreen.tagName);
+        }
+    }
 }, true);
 
 // ═══════════════════════════════════════════════════════════════════
@@ -80,7 +110,8 @@ window.addEventListener("engine-input", (inputEvent) => {
 // ═══════════════════════════════════════════════════════════════════
 ContextManager.registerEngineInputHandler({
     handleInput(inputEvent) {
-        if (!shouldIntercept(inputEvent)) return true;
+        if (!isEscapeFinish(inputEvent)) return true;
+        if (InterfaceMode.isInDefaultMode()) return true;
         InterfaceMode.switchToDefault();
         return false;
     },
