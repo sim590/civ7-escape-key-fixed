@@ -5,43 +5,80 @@
  * l'unité ou la ville en cours avant d'ouvrir le menu pause,
  * comme dans Civilization VI.
  *
- * Problème : dans le jeu de base, WorldInput gère l'action "cancel"
- * (manette) mais pas "keyboard-escape" (clavier). L'événement Échap
- * passe donc directement au gestionnaire de root-game.js qui ouvre
- * le menu pause sans vérifier si quelque chose est sélectionné.
+ * Problème : dans le jeu de base, deux chemins de code font défaut :
  *
- * Solution : enregistrer un gestionnaire d'entrée via le ContextManager
- * pour intercepter "keyboard-escape" AVANT que l'événement ne soit
- * distribué sur window (où root-game.js l'attrape). Si le mode
- * d'interface n'est pas le mode par défaut, on revient au mode par
- * défaut (ce qui désélectionne unités et villes) et on consomme
- * l'événement. Sinon, on laisse passer pour ouvrir le menu pause.
+ * 1) WorldInput gère l'action "cancel" (manette) mais pas
+ *    "keyboard-escape" (clavier). L'événement passe donc directement
+ *    au gestionnaire de root-game.js qui ouvre le menu pause.
+ *
+ * 2) Quand le panneau de production est ouvert (mode ville), le
+ *    FocusManager distribue l'événement sur l'élément focusé dans le
+ *    panneau. L'événement remonte (bubble) jusqu'à window où
+ *    root-game.js l'attrape et ouvre le menu pause, AVANT que les
+ *    gestionnaires enregistrés (engineInputEventHandlers) ne soient
+ *    atteints.
+ *
+ * Solution double :
+ *
+ * A) Un écouteur en phase de capture sur window intercepte
+ *    keyboard-escape quand il est distribué sur un élément DOM interne
+ *    (event.target !== window). Cela bloque l'événement avant que
+ *    root-game.js ne le voie pendant la remontée du FocusManager.
+ *
+ * B) Un gestionnaire enregistré dans le ContextManager attrape les cas
+ *    où le FocusManager n'est pas actif (ex. : sélection d'unité).
  */
 
 import { InterfaceMode } from '/core/ui/interface-modes/interface-modes.js';
 import ContextManager from '/core/ui/context-manager/context-manager.js';
 
-const escapeHandler = {
+/**
+ * Vérifie si l'événement keyboard-escape devrait désélectionner
+ * au lieu d'ouvrir le menu pause.
+ */
+function shouldIntercept(inputEvent) {
+    if (inputEvent.detail.name !== "keyboard-escape") return false;
+    if (inputEvent.detail.status !== InputActionStatuses.FINISH) return false;
+    if (InterfaceMode.isInDefaultMode()) return false;
+    if (InterfaceMode.isInInterfaceMode("INTERFACEMODE_PAUSE_MENU")) return false;
+    return true;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// Solution A : Écouteur capture sur window
+//
+// Intercepte keyboard-escape quand il est distribué par le
+// FocusManager (ou les screens) sur un élément DOM interne.
+// L'événement remonte normalement jusqu'à window où root-game.js
+// l'attraperait — on le bloque ici en phase de capture.
+//
+// On distingue les distributions internes (target !== window) de
+// la distribution finale par action-handler (target === window).
+// ═══════════════════════════════════════════════════════════════════
+window.addEventListener("engine-input", (inputEvent) => {
+    if (inputEvent.target === window) return;
+    if (!shouldIntercept(inputEvent)) return;
+
+    inputEvent.stopImmediatePropagation();
+    inputEvent.preventDefault();
+    InterfaceMode.switchToDefault();
+}, true);
+
+// ═══════════════════════════════════════════════════════════════════
+// Solution B : Gestionnaire ContextManager
+//
+// Attrape keyboard-escape quand le FocusManager n'est pas actif
+// (ex. : une unité est sélectionnée sans panneau focusé). Dans ce
+// cas, l'événement atteint les engineInputEventHandlers (étape 6
+// du handleInput du ContextManager).
+// ═══════════════════════════════════════════════════════════════════
+ContextManager.registerEngineInputHandler({
     handleInput(inputEvent) {
-        // On ne gère que keyboard-escape au moment du relâchement
-        if (inputEvent.detail.name !== "keyboard-escape") return true;
-        if (inputEvent.detail.status !== InputActionStatuses.FINISH) return true;
-
-        // Si on est déjà en mode par défaut, laisser passer → menu pause
-        if (InterfaceMode.isInDefaultMode()) return true;
-
-        // Si on est dans le menu pause, laisser passer → le menu gère lui-même
-        if (InterfaceMode.isInInterfaceMode("INTERFACEMODE_PAUSE_MENU")) return true;
-
-        // Retourner au mode par défaut (désélectionne unités et villes)
+        if (!shouldIntercept(inputEvent)) return true;
         InterfaceMode.switchToDefault();
-
-        // Retourner false = événement consommé, le menu pause ne s'ouvre pas
         return false;
     },
-    handleNavigation(navigationEvent) {
+    handleNavigation() {
         return true;
     }
-};
-
-ContextManager.registerEngineInputHandler(escapeHandler);
+});
