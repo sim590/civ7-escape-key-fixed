@@ -48,4 +48,4 @@ Only the `escape-key-fixed.modinfo` file and the `ui/` directory are required.
 
 ## License
 
-[MIT](LICENSE)
+[GNU General Public License v3.0 or later](LICENSE)
