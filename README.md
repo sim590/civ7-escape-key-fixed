@@ -1,28 +1,30 @@
 # EscapeKeyFixed
 
-A [Civilization VII](https://store.steampowered.com/app/1295660/) mod that restores the Civilization VI Escape key behavior: pressing Escape **deselects the current unit or city first**, instead of immediately opening the pause menu.
+A [Civilization VII](https://store.steampowered.com/app/1295660/) mod that restores the Civilization VI Escape key behavior: pressing Escape **deselects the current unit or city first**, instead of immediately opening the pause menu. In placement modes (e.g., building placement), Escape returns to the **parent screen** (e.g., city production) instead of going straight to the map.
 
 [Steam Workshop](https://steamcommunity.com/sharedfiles/filedetails/?id=3700086996)
 
 ## The Problem
 
-In the base game, pressing Escape while a unit or city is selected skips deselection entirely and opens the pause menu. This is a regression from Civilization VI, where Escape would first deselect, and only open the menu on a second press.
+In the base game, pressing Escape while a unit or city is selected skips deselection entirely and opens the pause menu. This is a regression from Civilization VI, where Escape would first deselect, and only open the menu on a second press. Additionally, pressing Escape in placement modes (e.g., placing a building) jumps straight to the map instead of returning to the parent screen (e.g., city production).
 
-Two separate bugs cause this:
+Three separate bugs cause this:
 
 1. **Unit selection:** `WorldInput` handles the `"cancel"` action (gamepad) but not `"keyboard-escape"` (keyboard). The event passes through unhandled and reaches `root-game.js`, which opens the pause menu.
 
 2. **City production panel:** When the panel is open, the `FocusManager` dispatches the input event on a focused DOM element inside the panel. Because `InputEngineEvent` has `bubbles: true`, the event bubbles up to `window`, where `root-game.js` catches it and opens the pause menu — before the `ContextManager` handler chain is ever reached.
 
+3. **Panels in default mode** (e.g., leader attributes): The panel handles Escape via a `window` bubble listener, but `root-game.js` was registered first and fires before the panel's listener. Both the pause menu and the panel close simultaneously.
+
 ## The Solution
 
 The mod uses a dual interception mechanism:
 
-- **Window capture listener** — Intercepts `keyboard-escape` during the FocusManager's internal DOM dispatch, using `capture: true` on `window` so it fires before `root-game.js`'s bubble-phase listener. Handles the **city production** case.
+- **Window capture listener** — Intercepts `keyboard-escape` during the FocusManager's internal DOM dispatch, using `capture: true` on `window` so it fires before `root-game.js`'s bubble-phase listener. Handles the **city production** and **panel close** cases.
 
 - **ContextManager handler** — Registered via `ContextManager.registerEngineInputHandler()`, fires when the FocusManager is not active (no focused panel). Handles the **unit selection** case.
 
-Both mechanisms share a `shouldIntercept()` guard that checks the event is `keyboard-escape`, has `FINISH` status, and the current interface mode is neither default nor pause menu. When intercepted, the mod calls `InterfaceMode.switchToDefault()`, which deselects units and cities.
+Both mechanisms delegate to `cancelOrDefault()`, which first calls `InterfaceMode.handleInput()` to reuse each mode's native cancel logic (e.g., building placement → city production, unit placement → unit selected). If the mode handler does not consume the event, it falls back to `InterfaceMode.switchToDefault()` to deselect units and cities.
 
 ## Installation
 

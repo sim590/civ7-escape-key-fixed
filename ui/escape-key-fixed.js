@@ -11,6 +11,9 @@
  * l'unité ou la ville en cours avant d'ouvrir le menu pause,
  * comme dans Civilization VI. Ferme aussi les panneaux ouverts
  * (ex. : attributs de dirigeant) avant d'ouvrir le menu pause.
+ * En mode de placement (ex. : placement de bâtiment), Échap revient
+ * au mode parent (ex. : production de la ville) au lieu de tout
+ * fermer et retourner directement à la carte.
  *
  * Problème : dans le jeu de base, trois chemins de code font défaut :
  *
@@ -37,14 +40,16 @@
  *
  * A) Un écouteur en phase de capture sur window intercepte
  *    keyboard-escape quand il est distribué sur un élément DOM interne
- *    (event.target !== window). Quand une unité ou ville est
- *    sélectionnée, il appelle InterfaceMode.switchToDefault(). Quand
- *    un panneau est ouvert en mode par défaut, il ferme le panneau
- *    via close() ou ContextManager.pop().
+ *    (event.target !== window). Quand on n'est pas en mode par défaut,
+ *    il délègue au gestionnaire du mode via cancelOrDefault() qui
+ *    réutilise la logique native d'annulation de chaque mode (ex. :
+ *    placement de bâtiment → production de ville). Quand un panneau
+ *    est ouvert en mode par défaut, il ferme le panneau via close()
+ *    ou ContextManager.pop().
  *
  * B) Un gestionnaire enregistré dans le ContextManager attrape les cas
  *    où aucune distribution DOM interne n'a eu lieu (ex. : sélection
- *    d'unité sans panneau focusé).
+ *    d'unité sans panneau focusé). Utilise aussi cancelOrDefault().
  */
 
 import { InterfaceMode } from '/core/ui/interface-modes/interface-modes.js';
@@ -61,6 +66,29 @@ function isEscapeFinish(inputEvent) {
     return true;
 }
 
+/**
+ * Tente d'annuler le mode d'interface actuel en déléguant au
+ * gestionnaire du mode courant, puis retombe sur switchToDefault()
+ * si le gestionnaire n'a pas consommé l'événement.
+ *
+ * Ça réutilise la logique native d'annulation de chaque mode :
+ *  - PLACE_BUILDING → CITY_PRODUCTION (avec CityID)
+ *  - ChoosePlot (CONSTRUCT_IN_RANGE, etc.) → UNIT_SELECTED ou DEFAULT
+ *  - ACQUIRE_TILE → DEFAULT
+ *  - etc.
+ *
+ * Les gestionnaires de mode vérifient isCancelInput() qui retourne
+ * true pour "keyboard-escape", "cancel" et "mousebutton-right".
+ * Aucun gestionnaire ne vérifie defaultPrevented, donc on peut
+ * appeler cette fonction même après preventDefault().
+ */
+function cancelOrDefault(inputEvent) {
+    const consumed = !InterfaceMode.handleInput(inputEvent);
+    if (!consumed) {
+        InterfaceMode.switchToDefault();
+    }
+}
+
 // ═══════════════════════════════════════════════════════════════════
 // Solution A : Écouteur capture sur window
 //
@@ -70,7 +98,8 @@ function isEscapeFinish(inputEvent) {
 // l'attraperait — on le bloque ici en phase de capture.
 //
 // Deux cas :
-//  - Mode non par défaut (unité/ville) → désélectionner
+//  - Mode non par défaut (unité/ville/placement) → cancelOrDefault()
+//    délègue au gestionnaire du mode pour une annulation intelligente
 //  - Mode par défaut avec écran ouvert → fermer l'écran
 // ═══════════════════════════════════════════════════════════════════
 window.addEventListener("engine-input", (inputEvent) => {
@@ -80,7 +109,7 @@ window.addEventListener("engine-input", (inputEvent) => {
     if (!InterfaceMode.isInDefaultMode()) {
         inputEvent.stopImmediatePropagation();
         inputEvent.preventDefault();
-        InterfaceMode.switchToDefault();
+        cancelOrDefault(inputEvent);
         return;
     }
 
@@ -126,13 +155,14 @@ window.addEventListener("engine-input", (inputEvent) => {
 // Attrape keyboard-escape quand le FocusManager n'est pas actif
 // (ex. : une unité est sélectionnée sans panneau focusé). Dans ce
 // cas, l'événement atteint les engineInputEventHandlers (étape 6
-// du handleInput du ContextManager).
+// du handleInput du ContextManager). Utilise cancelOrDefault()
+// pour déléguer au gestionnaire du mode actuel.
 // ═══════════════════════════════════════════════════════════════════
 ContextManager.registerEngineInputHandler({
     handleInput(inputEvent) {
         if (!isEscapeFinish(inputEvent)) return true;
         if (InterfaceMode.isInDefaultMode()) return true;
-        InterfaceMode.switchToDefault();
+        cancelOrDefault(inputEvent);
         return false;
     },
     handleNavigation() {
