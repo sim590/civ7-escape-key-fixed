@@ -36,6 +36,17 @@
  *    De plus, canOpenPauseMenu() ne vérifie pas si des écrans sont
  *    sur la pile du ContextManager.
  *
+ * Garde de sécurité : on vérifie canOpenPauseMenu() avant d'agir.
+ * Quand cette méthode retourne false, le jeu empêche déjà
+ * l'ouverture du menu pause (transition d'âge, cinématiques,
+ * diplomatie, etc.). Dans ces cas, les écrans actifs gèrent
+ * Échap eux-mêmes (ex. : screen-endgame saute l'animation,
+ * les panneaux cinématiques ferment la cinématique). Si on
+ * interceptait l'événement, on casserait ces gestionnaires
+ * natifs — par exemple, fermer screen-endgame durant une
+ * transition d'âge laisse une requête orpheline dans le
+ * DisplayQueueManager et gèle le jeu.
+ *
  * Solution double :
  *
  * A) Un écouteur en phase de capture sur window intercepte
@@ -105,6 +116,7 @@ function cancelOrDefault(inputEvent) {
 window.addEventListener("engine-input", (inputEvent) => {
     if (inputEvent.target === window) return;
     if (!isEscapeFinish(inputEvent)) return;
+    if (!ContextManager.canOpenPauseMenu()) return;
 
     if (!InterfaceMode.isInDefaultMode()) {
         inputEvent.stopImmediatePropagation();
@@ -162,6 +174,7 @@ ContextManager.registerEngineInputHandler({
     handleInput(inputEvent) {
         if (!isEscapeFinish(inputEvent)) return true;
         if (InterfaceMode.isInDefaultMode()) return true;
+        if (!ContextManager.canOpenPauseMenu()) return true;
         cancelOrDefault(inputEvent);
         return false;
     },
