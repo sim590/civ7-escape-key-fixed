@@ -1,6 +1,6 @@
 # EscapeKeyFixed
 
-A [Civilization VII](https://store.steampowered.com/app/1295660/) mod that restores the Civilization VI Escape key behavior: pressing Escape **deselects the current unit or city first**, instead of immediately opening the pause menu. In placement modes (e.g., building placement), Escape returns to the **parent screen** (e.g., city production) instead of going straight to the map.
+A [Civilization VII](https://store.steampowered.com/app/1295660/) mod that restores the Civilization VI Escape key behavior: pressing Escape **deselects the current unit or city first** and **closes open panels** (e.g., leader attributes), instead of immediately opening the pause menu. In placement modes (e.g., building placement), Escape returns to the **parent screen** (e.g., city production) instead of going straight to the map.
 
 [Steam Workshop](https://steamcommunity.com/sharedfiles/filedetails/?id=3700086996)
 
@@ -25,6 +25,12 @@ The mod uses a dual interception mechanism:
 - **ContextManager handler** — Registered via `ContextManager.registerEngineInputHandler()`, fires when the FocusManager is not active (no focused panel). Handles the **unit selection** case.
 
 Both mechanisms delegate to `cancelOrDefault()`, which first calls `InterfaceMode.handleInput()` to reuse each mode's native cancel logic (e.g., building placement → city production, unit placement → unit selected). If the mode handler does not consume the event, it falls back to `InterfaceMode.switchToDefault()` to deselect units and cities.
+
+### Safety guards
+
+- **Pause menu check** — The mod checks `ContextManager.canOpenPauseMenu()` before acting. When it returns `false` (age transitions, cinematics, diplomacy, endgame screen, etc.), native handlers are left in control. Without this, intercepting Escape during an age transition would freeze the game.
+
+- **Infinite call cycle prevention** — Some interface modes (e.g., commander promotion) re-dispatch a copy of the input event on a DOM element. This would cause an infinite loop with the capture listener. A shared `isProcessing` flag breaks the cycle, allowing the re-dispatched event to reach the panel's own handler.
 
 ## Installation
 
@@ -51,3 +57,26 @@ Only the `escape-key-fixed.modinfo` file and the `ui/` directory are required.
 ## License
 
 [GNU General Public License v3.0 or later](LICENSE)
+
+## Changelog
+
+### v1.1.1
+
+- Fixed: Escape no longer freezes the game during age transitions, cinematics, diplomacy, or the endgame screen.
+- Fixed: Escape now works correctly in the commander promotion panel (was silently broken by an infinite call cycle).
+
+### v1.1.0
+
+- Smart cancel in placement modes: Escape returns to the parent screen (e.g., building placement → city production) instead of going straight to the map.
+
+### v1.0.2
+
+- Fixed: PopupSequencer screens (e.g., unlock notifications) are now closed properly via `askForClose()`, preventing orphaned display requests.
+
+### v1.0.1
+
+- Fixed: Panels open in default mode (e.g., leader attributes) are now closed before the pause menu can open.
+
+### v1.0.0
+
+- Initial release. Escape deselects the current unit or city before opening the pause menu.

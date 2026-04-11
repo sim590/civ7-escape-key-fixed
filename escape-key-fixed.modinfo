@@ -2,7 +2,7 @@
 <Mod id="escape-key-fixed" version="1" xmlns="ModInfo">
 	<Properties>
 		<Name>EscapeKeyFixed</Name>
-		<Description>Pressing Escape deselects the current unit or city before opening the pause menu, like in Civ 6. In placement modes, Escape returns to the parent screen (e.g., city production) instead of the map.</Description>
+		<Description>Pressing Escape deselects the current unit or city and closes open panels before opening the pause menu, like in Civ 6. In placement modes, Escape returns to the parent screen (e.g., city production) instead of the map.</Description>
 		<Authors>simon</Authors>
 		<AffectsSavedGames>0</AffectsSavedGames>
 	</Properties>
