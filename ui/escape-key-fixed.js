@@ -100,6 +100,22 @@ function cancelOrDefault(inputEvent) {
     }
 }
 
+// Garde contre un cycle d'appels infini, partagée entre les
+// solutions A et B.
+//
+// Certains gestionnaires de mode (ex. : UNIT_PROMOTION) redistribuent
+// une copie de l'événement sur un élément DOM interne via
+// InputEngineEvent.CreateNewEvent(). Quand cancelOrDefault() appelle
+// InterfaceMode.handleInput(), le gestionnaire redistribue
+// l'événement, ce qui redéclenche notre écouteur capture → celui-ci
+// rappelle cancelOrDefault() → le gestionnaire redistribue encore →
+// cycle infini → débordement de pile.
+//
+// La variable isProcessing brise ce cycle : on la met à true avant
+// d'appeler cancelOrDefault() et on la remet à false après. Si
+// l'écouteur se redéclenche pendant ce temps, il sort immédiatement.
+let isProcessing = false;
+
 // ═══════════════════════════════════════════════════════════════════
 // Solution A : Écouteur capture sur window
 //
@@ -114,6 +130,7 @@ function cancelOrDefault(inputEvent) {
 //  - Mode par défaut avec écran ouvert → fermer l'écran
 // ═══════════════════════════════════════════════════════════════════
 window.addEventListener("engine-input", (inputEvent) => {
+    if (isProcessing) return;
     if (inputEvent.target === window) return;
     if (!isEscapeFinish(inputEvent)) return;
     if (!ContextManager.canOpenPauseMenu()) return;
@@ -121,7 +138,12 @@ window.addEventListener("engine-input", (inputEvent) => {
     if (!InterfaceMode.isInDefaultMode()) {
         inputEvent.stopImmediatePropagation();
         inputEvent.preventDefault();
-        cancelOrDefault(inputEvent);
+        isProcessing = true;
+        try {
+            cancelOrDefault(inputEvent);
+        } finally {
+            isProcessing = false;
+        }
         return;
     }
 
@@ -172,10 +194,16 @@ window.addEventListener("engine-input", (inputEvent) => {
 // ═══════════════════════════════════════════════════════════════════
 ContextManager.registerEngineInputHandler({
     handleInput(inputEvent) {
+        if (isProcessing) return true;
         if (!isEscapeFinish(inputEvent)) return true;
         if (InterfaceMode.isInDefaultMode()) return true;
         if (!ContextManager.canOpenPauseMenu()) return true;
-        cancelOrDefault(inputEvent);
+        isProcessing = true;
+        try {
+            cancelOrDefault(inputEvent);
+        } finally {
+            isProcessing = false;
+        }
         return false;
     },
     handleNavigation() {
