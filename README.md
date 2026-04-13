@@ -60,6 +60,10 @@ Only the `escape-key-fixed.modinfo` file and the `ui/` directory are required.
 
 ## Changelog
 
+### v1.1.2
+
+- Fixed: Mini-map sub-panels (map filters, multiplayer chat, yields, etc.) can now be reopened after closing them with Escape. Previously, the toggle state would desynchronize and the panel would open and close immediately on the next click.
+
 ### v1.1.1
 
 - Fixed: Escape no longer freezes the game during age transitions, cinematics, diplomacy, or the endgame screen.
