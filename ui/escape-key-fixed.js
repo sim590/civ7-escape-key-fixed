@@ -156,7 +156,20 @@ window.addEventListener("engine-input", (inputEvent) => {
     // pas l'instance du composant (Component/Panel). Les méthodes comme
     // askForClose() et close() sont sur l'objet .component.
     //
+    // Cas spécial : les sous-panneaux de la mini-carte (filtres,
+    // clavardage, rendement, etc.) sont ouverts via un mécanisme de
+    // bascule dans PanelMiniMap (toggleLensPanel, toggleChatPanel,
+    // toggleSubpanel). Chaque méthode synchronise un booléen local
+    // (lensPanelState, etc.) avec la pile du ContextManager. Si on
+    // ferme le sous-panneau directement via close() →
+    // ContextManager.pop(), le booléen reste à true et la prochaine
+    // bascule se désynchronise — le panneau s'ouvre et se ferme tout
+    // de suite au lieu de s'ouvrir normalement. On délègue donc à
+    // closeSubpanels() qui passe par les méthodes de bascule.
+    //
     // Ordre de priorité pour la fermeture :
+    //  0. closeSubpanels() — sous-panneaux de la mini-carte, passe
+    //     par les méthodes de bascule pour garder l'état synchronisé.
     //  1. askForClose() — utilisé par les écrans ouverts via le
     //     PopupSequencer (ex. : screen-unlocks). Cette méthode passe
     //     par PopupSequencer.closePopup() → DisplayQueueManager.close()
@@ -172,13 +185,18 @@ window.addEventListener("engine-input", (inputEvent) => {
     if (currentScreen) {
         inputEvent.stopImmediatePropagation();
         inputEvent.preventDefault();
-        const panel = currentScreen.component;
-        if (typeof panel?.askForClose === 'function') {
-            panel.askForClose();
-        } else if (typeof panel?.close === 'function') {
-            panel.close();
+        const miniMap = currentScreen.closest('panel-mini-map');
+        if (miniMap?.component?.closeSubpanels) {
+            miniMap.component.closeSubpanels();
         } else {
-            ContextManager.pop(currentScreen.tagName);
+            const panel = currentScreen.component;
+            if (typeof panel?.askForClose === 'function') {
+                panel.askForClose();
+            } else if (typeof panel?.close === 'function') {
+                panel.close();
+            } else {
+                ContextManager.pop(currentScreen.tagName);
+            }
         }
     }
 }, true);
