@@ -1,36 +1,35 @@
 # EscapeKeyFixed
 
-A [Civilization VII](https://store.steampowered.com/app/1295660/) mod that restores the Civilization VI Escape key behavior: pressing Escape **deselects the current unit or city first** and **closes open panels** (e.g., leader attributes), instead of immediately opening the pause menu. In placement modes (e.g., building placement), Escape returns to the **parent screen** (e.g., city production) instead of going straight to the map.
+A [Civilization VII](https://store.steampowered.com/app/1295660/) mod that restores the Civilization VI Escape key behavior for unit selection: pressing Escape while a unit is selected **deselects the unit** instead of opening the pause menu.
+
+Recent Civilization VII updates now handle Escape natively in panels and menus, so the mod no longer needs to intercept those cases. Its only job is unit deselection.
 
 [Steam Workshop](https://steamcommunity.com/sharedfiles/filedetails/?id=3700086996)
 
 ## The Problem
 
-In the base game, pressing Escape while a unit or city is selected skips deselection entirely and opens the pause menu. This is a regression from Civilization VI, where Escape would first deselect, and only open the menu on a second press. Additionally, pressing Escape in placement modes (e.g., placing a building) jumps straight to the map instead of returning to the parent screen (e.g., city production).
-
-Three separate bugs cause this:
-
-1. **Unit selection:** `WorldInput` handles the `"cancel"` action (gamepad) but not `"keyboard-escape"` (keyboard). The event passes through unhandled and reaches `root-game.js`, which opens the pause menu.
-
-2. **City production panel:** When the panel is open, the `FocusManager` dispatches the input event on a focused DOM element inside the panel. Because `InputEngineEvent` has `bubbles: true`, the event bubbles up to `window`, where `root-game.js` catches it and opens the pause menu — before the `ContextManager` handler chain is ever reached.
-
-3. **Panels in default mode** (e.g., leader attributes): The panel handles Escape via a `window` bubble listener, but `root-game.js` was registered first and fires before the panel's listener. Both the pause menu and the panel close simultaneously.
+In the base game, pressing Escape while a unit is selected skips deselection entirely and opens the pause menu. This is a regression from Civilization VI, where Escape would first deselect the unit, and only open the menu on a second press.
 
 ## The Solution
 
-The mod uses a dual interception mechanism:
+The mod uses two complementary mechanisms:
 
-- **Window capture listener** — Intercepts `keyboard-escape` during the FocusManager's internal DOM dispatch, using `capture: true` on `window` so it fires before `root-game.js`'s bubble-phase listener. Handles the **city production** and **panel close** cases.
+- **Window capture listener** — When a unit is selected, the `FocusManager` dispatches the input event on a focused element inside the unit actions panel. Because the event bubbles, `root-game.js` would open the pause menu before the `ContextManager` handlers run. The capture listener intercepts this inner dispatch first.
 
-- **ContextManager handler** — Registered via `ContextManager.registerEngineInputHandler()`, fires when the FocusManager is not active (no focused panel). Handles the **unit selection** case.
+- **ContextManager handler** — Covers the case where no element has focus and the event reaches the engine input handlers.
 
-Both mechanisms delegate to `cancelOrDefault()`, which first calls `InterfaceMode.handleInput()` to reuse each mode's native cancel logic (e.g., building placement → city production, unit placement → unit selected). If the mode handler does not consume the event, it falls back to `InterfaceMode.switchToDefault()` to deselect units and cities.
+Both use the same guard. Escape only deselects the unit when:
 
-### Safety guards
+1. the event is a finished `keyboard-escape`;
+2. no panel or screen is open (`ContextManager.isEmpty`), so the game's native Escape handling stays in control;
+3. the current interface mode is `INTERFACEMODE_UNIT_SELECTED`;
+4. `ContextManager.canOpenPauseMenu()` returns `true`.
 
-- **Pause menu check** — The mod checks `ContextManager.canOpenPauseMenu()` before acting. When it returns `false` (age transitions, cinematics, diplomacy, endgame screen, etc.), native handlers are left in control. Without this, intercepting Escape during an age transition would freeze the game.
+When those conditions are met, the mod calls `InterfaceMode.switchToDefault()`, which deselects the unit, and consumes the event so `root-game.js` does not open the pause menu.
 
-- **Infinite call cycle prevention** — Some interface modes (e.g., commander promotion) re-dispatch a copy of the input event on a DOM element. This would cause an infinite loop with the capture listener. A shared `isProcessing` flag breaks the cycle, allowing the re-dispatched event to reach the panel's own handler.
+### Input handler return values
+
+This is the part that broke with the new game version. `ContextManager` input handlers now return `InputHandlerState.Active` or `InputHandlerState.Handled`, not a boolean. Returning `true` is equivalent to `Handled` (1) and consumes the event, so the old boolean-based handler swallowed every input event that reached it, including camera keys such as WASD.
 
 ## Installation
 
@@ -59,6 +58,13 @@ Only the `escape-key-fixed.modinfo` file and the `ui/` directory are required.
 [GNU General Public License v3.0 or later](LICENSE)
 
 ## Changelog
+
+### v2.0.0
+
+- Fixed: Escape now deselects the current unit again on the current game version.
+- Fixed: the input handler now returns `InputHandlerState` values instead of booleans, so it no longer swallows unrelated input such as WASD.
+- Removed: panel and menu handling. The game now handles Escape natively in menus and panels.
+- Removed: placement-mode parent-screen navigation (also native now).
 
 ### v1.1.2
 
