@@ -2,7 +2,7 @@
 <Mod id="escape-key-fixed" version="2.0.0" xmlns="ModInfo">
 	<Properties>
 		<Name>EscapeKeyFixed</Name>
-		<Description>Pressing Escape deselects the current unit instead of opening the pause menu, like in Civilization VI. Menus and panels are handled by the game itself.</Description>
+		<Description>Pressing Escape deselects the current unit instead of opening the pause menu. Provides the unit deselection action that Civilization VII otherwise lacks; in Civilization VI this was done by left-clicking the map. Menus and panels are handled by the game itself.</Description>
 		<Authors>simon</Authors>
 		<AffectsSavedGames>0</AffectsSavedGames>
 	</Properties>

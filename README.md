@@ -1,14 +1,14 @@
 # EscapeKeyFixed
 
-A [Civilization VII](https://store.steampowered.com/app/1295660/) mod that restores the Civilization VI Escape key behavior for unit selection: pressing Escape while a unit is selected **deselects the unit** instead of opening the pause menu.
+A [Civilization VII](https://store.steampowered.com/app/1295660/) mod that adds a way to deselect the currently selected unit with Escape, instead of opening the pause menu. In Civilization VI, Escape was used to close submenus, while units were deselected with a left-click on the map. Civilization VII no longer provides a unit deselection action, so this mod maps it to Escape.
 
-Recent Civilization VII updates now handle Escape natively in panels and menus, so the mod no longer needs to intercept those cases. Its only job is unit deselection.
+As of Civilization VII 1.5.0, the game handles Escape natively in panels, menus, and placement modes. This mod only handles unit deselection.
 
 [Steam Workshop](https://steamcommunity.com/sharedfiles/filedetails/?id=3700086996)
 
 ## The Problem
 
-In the base game, pressing Escape while a unit is selected skips deselection entirely and opens the pause menu. This is a regression from Civilization VI, where Escape would first deselect the unit, and only open the menu on a second press.
+In the base game, pressing Escape while a unit is selected skips deselection entirely and opens the pause menu. Civilization VI allowed deselecting a unit by left-clicking the map, but Civilization VII no longer provides a way to deselect a unit. This mod maps that missing action to Escape.
 
 ## The Solution
 
@@ -61,10 +61,10 @@ Only the `escape-key-fixed.modinfo` file and the `ui/` directory are required.
 
 ### v2.0.0
 
-- Fixed: Escape now deselects the current unit again on the current game version.
+- Fixed: Escape now deselects the current unit on the current game version.
 - Fixed: the input handler now returns `InputHandlerState` values instead of booleans, so it no longer swallows unrelated input such as WASD.
-- Removed: panel and menu handling. The game now handles Escape natively in menus and panels.
-- Removed: placement-mode parent-screen navigation (also native now).
+- Removed: panel and menu handling. The game now handles Escape natively in menus and panels since 1.5.0.
+- Removed: placement-mode parent-screen navigation (also native since 1.5.0).
 
 ### v1.1.2
 

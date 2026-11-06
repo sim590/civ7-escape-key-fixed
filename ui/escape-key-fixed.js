@@ -7,12 +7,14 @@
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Restaure le comportement de Civilization VI pour la sélection
- * d'unité : quand une unité est sélectionnée, Échap la désélectionne
- * au lieu d'ouvrir le menu pause.
+ * Ajoute la désélection de l'unité avec Échap : quand une unité est
+ * sélectionnée, Échap la désélectionne au lieu d'ouvrir le menu pause.
+ * Dans Civilization VI, Échap servait à fermer les sous-menus et la
+ * désélection se faisait par un clic gauche sur la carte. Civilization
+ * VII n'offre plus cette action, donc le greffon l'associe à Échap.
  *
- * Depuis une mise à jour récente de Civilization VII, le jeu gère
- * lui-même Échap dans les panneaux et les menus. Le greffon ne
+ * Depuis Civilization VII 1.5.0, le jeu gère lui-même Échap dans les
+ * panneaux, les menus et les modes de placement. Le greffon ne
  * s'occupe donc plus que de la désélection d'unité.
  *
  * Deux mécanismes sont nécessaires :
